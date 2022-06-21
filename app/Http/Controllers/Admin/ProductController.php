@@ -22,6 +22,7 @@ class ProductController extends Controller
 
     public function addProduct()
     {
+
         return view('admin.product.add', [
             'title' => 'Thêm sản phẩm',
             'menus' => $this->productService->getMenuloc(),
