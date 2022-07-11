@@ -26,7 +26,7 @@ class CreateFormRequestProduct extends FormRequest
         return [
             'name' => 'required',
             'file' => 'required',
-            'file' => 'mimes:jpeg,jpg,png',
+            // 'file' => 'mimes:jpeg,jpg,png',
             'menu_id' => 'required',
             'description' => 'required',
             'price' => 'required',
@@ -40,7 +40,7 @@ class CreateFormRequestProduct extends FormRequest
         return [
             'name.required' => 'Vui lòng nhập tên sản phẩm',
             'file.required' => 'Bắc buộc phải nhập hình ảnh',
-            'file.mimes' => 'File không đúng định dạng hình ảnh, Vui lòng thử lại!',
+            // 'file.mimes:jpeg,jpg,png' => 'File không đúng định dạng hình ảnh, Vui lòng thử lại!',
             'menu_id.required' => 'Hiện tại không có danh mục nào hoạt động. Không thể thêm sản phẩm!',
             'qty.required' => 'Vui lòng nhập tên sản phẩm',
             'description.required' => 'Vui lòng nhập chi tiết ',

@@ -1,3 +1,9 @@
+<?php
+
+use Illuminate\Support\Facades\Session;
+
+$data = Session::get('shop');
+?>
 <aside class="main-sidebar sidebar-dark-primary elevation-4">
     <!-- Brand Logo -->
     <a href="/admin" class="brand-link">
@@ -23,29 +29,7 @@
             <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
                 <!-- Add icons to the links using the .nav-icon class
                      with font-awesome or any other icon font library -->
-                <li class="nav-item">
-                    <a href="#" class="nav-link">
-                        <i class="nav-icon fas fa-bars"></i>
-                        <p>
-                            Danh mục
-                            <i class="right fas fa-angle-left"></i>
-                        </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                        <li class="nav-item">
-                            <a href="/admin/menus/add" class="nav-link">
-                                <i class="far fa-circle nav-icon"></i>
-                                <p>Thêm danh mục</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="/admin/menus/list" class="nav-link">
-                                <i class="far fa-circle nav-icon"></i>
-                                <p>Danh sách danh mục</p>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
+
 
 
 
@@ -65,7 +49,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/products/list" class="nav-link">
+                            <a href="/admin/products/list/{{$data->id}}" class="nav-link">
                                 <i class="far fa-circle nav-icon"></i>
                                 <p>Danh sách sản phẩm</p>
                             </a>

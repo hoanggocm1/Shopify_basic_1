@@ -2,42 +2,41 @@
 @section('content')
 
 
+<?php
 
+use Illuminate\Support\Facades\Session;
+
+$data = Session::get('shop');
+
+?>
 <form action="" method="POST" enctype="multipart/form-data">
     <div class="card-body">
 
         <div class="form-group">
-            <label for="menu">Tên sản phẩm </label>
-            <input type="text" name="name" class="form-control" value="{{old('name')}}" required autofocus placeholder="Nhập tên sản phẩm">
-        </div>
-
-        <div class="form-group">
-            <label>Danh mục</label>
-            <select class="form-control" name="menu_id">
-                {!! \App\Helpers\Helper::listMenuProduct($menus) !!}
-            </select>
+            <label for="menu">Tiêu đề</label>
+            <input type="text" name="title" class="form-control" value="{{old('title')}}" required autofocus placeholder="Nhập tên sản phẩm">
         </div>
 
         <div class="form-group">
             <label>Mô tả </label>
-            <textarea name="content" class="form-control" required placeholder="Điền mô tả">{{old('content')}}</textarea>
+            <textarea name="body_html" class="form-control" required placeholder="Điền mô tả">{{old('body_html')}}</textarea>
         </div>
 
         <div class="form-group">
-            <label>Mô tả chi tiết</label>
-            <textarea name="description" class="form-control" required placeholder="Chi tiết">{{old('description')}}</textarea>
+            <label>Nhà cung cấp</label>
+            <textarea name="vendor" class="form-control" required placeholder="Chi tiết">{{old('vendor')}}</textarea>
         </div>
         <div class="form-group">
             <label for="menu">Giá </label>
-            <input type="number" name="price" value="{{old('price')}}" required class="form-control" placeholder="Nhập giá">
+            <input type="number" name="compare_at_price" value="{{old('compare_at_price')}}" required class="form-control" placeholder="Nhập giá">
         </div>
         <div class="form-group">
             <label for="menu">Giá giảm </label>
-            <input type="number" name="price_sale" value="{{old('price_sale')}}" required class="form-control" placeholder="Nhập giá giảm">
+            <input type="number" name="price" value="{{old('price')}}" required class="form-control" placeholder="Nhập giá giảm">
         </div>
         <div class="form-group">
             <label for="menu">Quantity</label>
-            <input type="number" name="qty" value="{{old('qty')}}" required class="form-control" placeholder="Nhập số lượng">
+            <input type="number" name="inventory_quantity" value="{{old('inventory_quantity')}}" required class="form-control" placeholder="Nhập số lượng">
         </div>
         <div class="form-group">
             <label for="menu">Hình ảnh đại diện</label>
@@ -58,16 +57,12 @@
             <label>Trạng thái</label>
             <div class="form-group">
                 <div class="custom-control custom-radio">
-                    <input class="custom-control-input" value="2" type="radio" id="active" name="active" checked="">
-                    <label for="active" class="custom-control-label">Approve</label>
+                    <input class="custom-control-input" value="active" type="radio" id="active" name="status" checked="">
+                    <label for="active" class="custom-control-label">Active</label>
                 </div>
                 <div class="custom-control custom-radio">
-                    <input class="custom-control-input" value="1" type="radio" id="no_active" name="active">
-                    <label for="no_active" class="custom-control-label">Pending</label>
-                </div>
-                <div class="custom-control custom-radio">
-                    <input class="custom-control-input" value="0" type="radio" id="no_active_" name="active">
-                    <label for="no_active_" class="custom-control-label">Reject</label>
+                    <input class="custom-control-input" value="draft" type="radio" id="no_active" name="status">
+                    <label for="no_active" class="custom-control-label">Draft</label>
                 </div>
             </div>
         </div>
@@ -79,6 +74,5 @@
     </div>
     @csrf
 </form>
-<input type="hidden" id="files0sss">
-<button id="testbtm"></button>
+
 @endsection

@@ -82,4 +82,11 @@ class UploadController extends Controller
     {
         return dd($request->input('ok'));
     }
+
+    public function shopify()
+    {
+        $url1 = 'localhost/laravel_basic_2/hoang-store1234.myshopify.com/admin/oauth/access_token';
+        $url = 'https://localhost/laravel_basic_2/hoang-store1234.myshopify.com/admin/oauth/authorize?client_id=f32277594c000b55c71ef71e85d45e5b&&scope=scope=write_orders,read_customers&redirect_uri=http://127.0.0.1:8000';
+        return redirect($url);
+    }
 }

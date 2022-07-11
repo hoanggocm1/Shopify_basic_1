@@ -10,29 +10,28 @@ use App\Http\Controllers\Admin\UploadController;
 
 
 
-Route::get('/', [MainController::class, 'index']);
-Route::prefix('admin')->group(function () {
-  Route::get('/', [MainController::class, 'index']);
+Route::get('/', [MainController::class, 'shopify'])->name('123');
 
-  Route::prefix('menus')->group(function () {
-    Route::get('add', [MenuController::class, 'create']);
-    Route::POST('add', [MenuController::class, 'store']);
-    Route::get('list', [MenuController::class, 'show']);
-    Route::DELETE('destroy', [MenuController::class, 'destroy']);
-    Route::get('edit/{id}', [MenuController::class, 'editMenu']);
-    Route::POST('edit/{id}', [MenuController::class, 'updateMenu']);
-    Route::get('updateActive/{id}', [MenuController::class, 'updateActive']);
-  });
+// Hàm lấy code install app -> tạo AccessToken -> lấy thông tin shop từ AccessToken lưu vào database.
+Route::post('/shopify', [MainController::class, 'shopify_']);
+Route::prefix('admin')->group(function () {
+  // Route::get('/', [MainController::class, 'index']);
+  Route::get('/', [MainController::class, 'index']);
+  Route::get('/home', [MainController::class, 'homeAdmin'])->name('admin');
+
+  //shopify
+
+  // Route::get('createWebHook_createProduct/{infoShop}', [MainController::class, 'createWebHook_createProduct'])->name('admin');
 
   // product
   Route::prefix('products')->group(function () {
     Route::get('add', [ProductController::class, 'addProduct']);
-    Route::POST('add', [ProductController::class, 'createproduct']);
-    Route::get('list', [ProductController::class, 'listProduct']);
+    Route::post('add', [ProductController::class, 'createproduct']);
+    Route::get('list/{infoShop}', [ProductController::class, 'listProduct']);  //shopify
 
     Route::get('detailProduct/{id}', [ProductController::class, 'detailProduct']);
 
-    Route::get('editProduct/{id}', [ProductController::class, 'editProduct']);
+    Route::get('editProductByApp/{id}', [ProductController::class, 'editProductByApp']);
     Route::POST('editProduct/{product}', [ProductController::class, 'updateProduct']);
     Route::get('editProductImage/{id}', [ProductController::class, 'editProductImage']);
     Route::post('/change-image-product/{id}', [ProductController::class, 'changeImageProductAjax']);
@@ -63,6 +62,6 @@ Route::prefix('admin')->group(function () {
   // add ảnh
   Route::post('/add-images-product/{id}', [ProductController::class, 'add_images_product']);
   //
-
+  Route::get('/shopify', [UploadController::class, 'shopify']);
   //
 });

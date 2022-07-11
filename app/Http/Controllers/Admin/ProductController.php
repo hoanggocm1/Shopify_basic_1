@@ -5,9 +5,19 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Services\Product\ProductService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Product\CreateFormRequestProduct;
+use App\Jobs\addProduct;
+use App\Models\Image;
+use App\Models\imageFirst;
+use App\Models\infoShop;
+use App\Models\Option;
+use App\Models\Product;
+use App\Models\ValueOption;
+use App\Models\Variant;
+use Carbon\Carbon;
+use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Support\Facades\Session;
 
 class ProductController extends Controller
 {
@@ -24,375 +34,492 @@ class ProductController extends Controller
 
         return view('admin.product.add', [
             'title' => 'Thêm sản phẩm',
-            'menus' => $this->productService->getMenuloc(),
         ]);
     }
 
-    public function createproduct(CreateFormRequestProduct $request)
+    public function createproduct(Request $request)
     {
-        $result = $this->productService->ValidatePrice($request);
+        $infoShop = Session::get('shop');
+        $infoShop_ = infoShop::where('id', $infoShop->id)->first();
 
-        if ($result) {
-            $image =  $request->input('file');
-
-            if ($image) {
-                $product = DB::table('products')
-                    ->updateOrInsert([
-                        'name' => (string) $request->input('name'),
-                        'menu_id' => $request->input('menu_id'),
-                        'description' => (string) $request->input('description'),
-                        'content' => (string) $request->input('content'),
-                        'qty' => (int)$request->input('qty'),
-                        'price' => (int)$request->input('price'),
-                        'price_sale' => (int)$request->input('price_sale'),
-                        'image' => (string)$image,
-                        'active' => (int)$request->input('active')
-                    ]);
-            }
-            session()->flash('success', 'Thêm sản phẩm thành công.');
-            return redirect()->back();
-        }
-        session()->flash('error', 'Thêm sản phẩm thất bại!');
+        $client = new Client();
+        $url = 'https://' . $infoShop->domain . '/admin/api/2022-07/products.json';
+        $hostNgrok = env('ngrok');
+        $resShop = $client->request('POST', $url, [
+            'headers' => [
+                'X-Shopify-Access-Token' => $infoShop_->access_token,
+            ],
+            'form_params' => [
+                'product' => [
+                    'title' => $request->input('title'),
+                    'body_html' => $request->input('body_html'),
+                    'vendor' => $request->input('vendor'),
+                    'status' => $request->input('status'),
+                    'product_type' => 'Snowboard',
+                ]
+            ]
+        ]);
         return redirect()->back();
     }
 
-    public function listProduct()
+    public function deleteProductByApp($idProduct, infoShop $idShop)
     {
-        $menus =  DB::table('menus')->get();
-        $products = $this->productService->getProduct();
-        $product_all = DB::table('products')->get();
-        $Reject = 0;
-        $Pending = 0;
-        $Approve = 0;
-        foreach ($product_all  as $product) {
-            if ($product->active == 0) {
-                $Reject++;
-            } elseif ($product->active == 1) {
-                $Pending++;
-            } else {
-                $Approve++;
+        $client = new Client();
+        $url = 'https://' . $idShop->domain . '/admin/api/2022-07/products/' . $idProduct . '.json';
+        $resShop = $client->request('DELETE', $url, [
+            'headers' => [
+                'X-Shopify-Access-Token' => $idShop->access_token,
+            ],
+        ]);
+        Product::where('id', $idProduct)->delete();
+        return redirect()->back();
+    }
+    public function editProductByApp($id)
+    {
+        $infoShop = Session::get('shop');
+        $product = Product::where('id', $id)->first();
+        return view('admin.product.editproduct', [
+            'title' => 'Sửa thông tin sản phẩm' . $product->title,
+            'product' => $product,
+            'idShop' => $infoShop->id,
+        ]);
+    }
+    public function updateProductByApp(Request $request, $idProduct, infoShop $idShop)
+    {
+        $client = new Client();
+        $url = 'https://' . $idShop->domain . '/admin/api/2022-07/products/' . $idProduct . '.json';
+        $resShop = $client->request('PUT', $url, [
+            'headers' => [
+                'X-Shopify-Access-Token' => $idShop->access_token,
+            ],
+            'form_params' => [
+                'product' => [
+                    'title' => $request->input('title'),
+                    'body_html' => $request->input('body_html'),
+                    'vendor' => $request->input('vendor'),
+                    'status' => $request->input('status'),
+                    'product_type' => 'Snowboard',
+                    'image' => '123',
+                ]
+            ]
+        ]);
+
+        return redirect('admin/products/list/' . $idShop->id);
+    }
+
+    public function listProduct(infoShop $infoShop)
+    {
+
+        // shopify
+        $client = new Client();
+        $url = 'https://' . $infoShop->domain . '/admin/api/2022-07/products.json';
+
+        $hostNgrok = env('ngrok');
+        $resShop = $client->request('GET', 'https://hoang-store1234.myshopify.com/admin/api/2022-07/products.json', [
+            'headers' => [
+                'X-Shopify-Access-Token' => $infoShop->access_token,
+            ],
+
+        ]);
+        $data = json_decode($resShop->getBody()->getContents());
+
+        foreach ($data as $value) {
+            for ($i = 0; $i < count($value); $i++) {
+
+                if (empty(Product::find($value[$i]->id))) {
+                    Product::create([
+                        'domain_shop' => Session::get('shop')->domain,
+                        'id' => $value[$i]->id,
+                        'title' => $value[$i]->title,
+                        'body_html' => $value[$i]->body_html,
+                        'vendor' => $value[$i]->vendor,
+                        'product_type' => $value[$i]->product_type,
+                        'handle' => $value[$i]->handle,
+                        'published_at' => $value[$i]->published_at,
+                        'template_suffix' => $value[$i]->template_suffix,
+                        'status' => $value[$i]->status,
+                        'published_scope' => $value[$i]->published_scope,
+                        'tags' => $value[$i]->tags,
+                    ]);
+                    if (count($value[$i]->images) > 0) {
+                        imageFirst::create([
+                            'id' => $value[$i]->images[0]->id,
+                            'product_id' => $value[$i]->images[0]->product_id,
+                            'alt' => $value[$i]->images[0]->alt,
+                            'width' => $value[$i]->images[0]->width,
+                            'height' => $value[$i]->images[0]->height,
+                            'src' => $value[$i]->images[0]->src,
+                        ]);
+                    }
+
+                    for ($j = 0; $j < count($value[$i]->variants); $j++) {
+                        Variant::create([
+                            'id' => $value[$i]->variants[$j]->id,
+                            'product_id' => $value[$i]->variants[$j]->product_id,
+                            'title' =>  $value[$i]->variants[$j]->title,
+                            'price' =>  $value[$i]->variants[$j]->price,
+                            'sku' =>  $value[$i]->variants[$j]->sku,
+                            'position' =>  $value[$i]->variants[$j]->position,
+                            'inventory_policy' =>  $value[$i]->variants[$j]->inventory_policy,
+                            'compare_at_price' =>  $value[$i]->variants[$j]->compare_at_price,
+                            'fulfillment_service' =>  $value[$i]->variants[$j]->fulfillment_service,
+                            'inventory_management' =>  $value[$i]->variants[$j]->inventory_management,
+                            'option1' =>  $value[$i]->variants[$j]->option1,
+                            'option2' =>  $value[$i]->variants[$j]->option2,
+                            'option3' =>  $value[$i]->variants[$j]->option3,
+                            'taxable' =>  $value[$i]->variants[$j]->taxable,
+                            'barcode' =>  $value[$i]->variants[$j]->barcode,
+                            'image_id' =>  $value[$i]->variants[$j]->image_id,
+                            'weight' =>  $value[$i]->variants[$j]->weight,
+                            'weight_unit' =>  $value[$i]->variants[$j]->weight_unit,
+                            'inventory_item_id' =>  $value[$i]->variants[$j]->inventory_item_id,
+                            'inventory_quantity' =>  $value[$i]->variants[$j]->inventory_quantity,
+                            'old_inventory_quantity' =>  $value[$i]->variants[$j]->old_inventory_quantity,
+                            'requires_shipping' =>  $value[$i]->variants[$j]->requires_shipping,
+                        ]);
+                    }
+                    for ($z = 0; $z < count($value[$i]->options); $z++) {
+                        Option::create([
+                            'id' => $value[$i]->options[$z]->id,
+                            'product_id' => $value[$i]->options[$z]->product_id,
+                            'name' => $value[$i]->options[$z]->name,
+                            'position' => $value[$i]->options[$z]->position,
+                        ]);
+                        for ($y = 0; $y < count($value[$i]->options[$z]->values); $y++) {
+                            ValueOption::create([
+                                'product_id' => $value[$i]->options[$z]->product_id,
+                                'id_options' => $value[$i]->options[$z]->id,
+                                'stt' => $y,
+                                'name' => $value[$i]->options[$z]->values[$y],
+                            ]);
+                        }
+                    }
+                    for ($x = 0; $x < count($value[$i]->images); $x++) {
+                        Image::create([
+                            'id' => $value[$i]->images[$x]->id,
+                            'product_id' => $value[$i]->images[$x]->product_id,
+                            'position' => $value[$i]->images[$x]->position,
+                            'alt' => $value[$i]->images[$x]->alt,
+                            'width' => $value[$i]->images[$x]->width,
+                            'height' => $value[$i]->images[$x]->height,
+                            'src' => $value[$i]->images[$x]->src,
+                        ]);
+                    }
+                }
             }
         }
+        $products = Product::where('domain_shop', Session::get('shop')->domain)->get();
         return view('admin.product.list', [
             'title' => ' Danh sách sản phẩm ',
             'products' => $products,
-            'Reject' => $Reject,
-            'Pending' => $Pending,
-            'Approve' => $Approve,
-            'menus' => $menus,
         ]);
     }
 
-    public function editProduct($id)
+    // Nhận webhook kho tạo sản phẩm trên shopify => add vào DB
+    public function createProductShopify(Request $request, $infoShop)
     {
-        $product_ =  DB::table('products')->where('id', $id)->get();
-        $product = $product_[0];
-        return view('admin.product.editproduct', [
-            'title' => 'Sửa thông tin sản phẩm' . $product->name,
-            'product' => $product_,
-            'menus' => $this->productService->getMenuloc(),
+
+        $createProduct = $request->input();
+
+
+        $product =  Product::create([
+            'id' => $createProduct['id'],
+            'domain_shop' => $infoShop,
+            'title' => $createProduct['title'],
+            'body_html' => $createProduct['body_html'],
+            'vendor' => $createProduct['vendor'],
+            'product_type' => $createProduct['product_type'],
+            'handle' => $createProduct['handle'],
+            'published_at' => $createProduct['published_at'],
+            'template_suffix' => $createProduct['template_suffix'],
+            'status' => $createProduct['status'],
+            'published_scope' => $createProduct['published_scope'],
+            'tags' => $createProduct['tags'],
         ]);
-    }
+        $job = (new addProduct($product))->delay(Carbon::now()->addSecond(3));
+        dispatch($job);
+        if ($createProduct['image'] !== null) {
+            imageFirst::create([
+                'id' => $createProduct['image']['id'],
+                'product_id' => $createProduct['image']['product_id'],
+                'alt' => $createProduct['image']['alt'],
+                'width' => $createProduct['image']['width'],
+                'height' => $createProduct['image']['height'],
+                'src' => $createProduct['image']['src'],
+            ]);
+        }
 
-    public function updateProduct(Request $request, $id)
-    {
-        $image = $request->input('file');
-        $product = DB::table('products')->where('id', $id)->get();
-        if ($image) {
-
-            DB::table('products')->where('id', $id)
-                ->update([
-                    'name' => $request->input('name'),
-                    'menu_id' => $request->input('menu_id'),
-                    'description' => $request->input('description'),
-                    'content' => $request->input('content'),
-                    'price' => $request->input('price'),
-                    'price_sale' => $request->input('price_sale'),
-                    'qty' => $request->input('qty'),
-                    'active' => $request->input('active'),
-                    'image' => $image,
-
+        if ($createProduct['variants'] !== null) {
+            for ($j = 0; $j < count($createProduct['variants']); $j++) {
+                Variant::create([
+                    'id' => $createProduct['variants'][$j]['id'],
+                    'product_id' => $createProduct['variants'][$j]['product_id'],
+                    'title' =>  $createProduct['variants'][$j]['title'],
+                    'price' =>  $createProduct['variants'][$j]['price'],
+                    'sku' =>  $createProduct['variants'][$j]['sku'],
+                    'position' =>  $createProduct['variants'][$j]['position'],
+                    'inventory_policy' =>  $createProduct['variants'][$j]['inventory_policy'],
+                    'compare_at_price' =>  $createProduct['variants'][$j]['compare_at_price'],
+                    'fulfillment_service' =>  $createProduct['variants'][$j]['fulfillment_service'],
+                    'inventory_management' =>  $createProduct['variants'][$j]['inventory_management'],
+                    'option1' =>  $createProduct['variants'][$j]['option1'],
+                    'option2' =>  $createProduct['variants'][$j]['option2'],
+                    'option3' =>  $createProduct['variants'][$j]['option3'],
+                    'taxable' =>  $createProduct['variants'][$j]['taxable'],
+                    'barcode' =>  $createProduct['variants'][$j]['barcode'],
+                    'image_id' =>  $createProduct['variants'][$j]['image_id'],
+                    'weight' =>  $createProduct['variants'][$j]['weight'],
+                    'weight_unit' =>  $createProduct['variants'][$j]['weight_unit'],
+                    'inventory_item_id' =>  $createProduct['variants'][$j]['inventory_item_id'],
+                    'inventory_quantity' =>  $createProduct['variants'][$j]['inventory_quantity'],
+                    'old_inventory_quantity' =>  $createProduct['variants'][$j]['old_inventory_quantity'],
+                    'requires_shipping' =>  $createProduct['variants'][$j]['requires_shipping'],
                 ]);
+            }
+        }
+
+        for ($z = 0; $z < count($createProduct['options']); $z++) {
+            Option::create([
+                'id' => $createProduct['options'][$z]['id'],
+                'product_id' => $createProduct['options'][$z]['product_id'],
+                'name' => $createProduct['options'][$z]['name'],
+                'position' => $createProduct['options'][$z]['position'],
+            ]);
+            for ($y = 0; $y < count($createProduct['options'][$z]['values']); $y++) {
+                ValueOption::create([
+                    'product_id' => $createProduct['options'][$z]['product_id'],
+                    'id_options' => $createProduct['options'][$z]['id'],
+                    'stt' => $y,
+                    'name' => $createProduct['options'][$z]['values'][$y],
+                ]);
+            }
+        }
+
+        if ($createProduct['images'] !== null) {
+            for ($x = 0; $x < count($createProduct['images']); $x++) {
+                Image::create([
+                    'id' => $createProduct['images'][$x]['id'],
+                    'product_id' => $createProduct['id'],
+                    'position' => $createProduct['images'][$x]['position'],
+                    'alt' => $createProduct['images'][$x]['alt'],
+                    'width' => $createProduct['images'][$x]['width'],
+                    'height' => $createProduct['images'][$x]['height'],
+                    'src' => $createProduct['images'][$x]['src'],
+                ]);
+            }
+        }
+    }
+
+    //nhận webhook khi update sản phẩm trên shopify
+    public function updateProductShopify(Request $request)
+    {
+        $update = $request->input();
+        Product::where('id', $update['id'])->update([
+            'title' => $update['title'],
+            'body_html' => $update['body_html'],
+            'vendor' => $update['vendor'],
+            'product_type' => $update['product_type'],
+            'handle' => $update['handle'],
+            'published_at' => $update['published_at'],
+            'template_suffix' => $update['template_suffix'],
+            'status' => $update['status'],
+            'published_scope' => $update['published_scope'],
+            'tags' => $update['tags'],
+        ]);
+        if ($update['image'] == null) {
+            imageFirst::where('product_id', $update['id'])->delete();
         } else {
-            DB::table('products')->where('id', $id)
-                ->update([
-                    'name' => $request->input('name'),
-                    'menu_id' => $request->input('menu_id'),
-                    'description' => $request->input('description'),
-                    'content' => $request->input('content'),
-                    'price' => $request->input('price'),
-                    'price_sale' => $request->input('price_sale'),
-                    'qty' => $request->input('qty'),
-                    'active' => $request->input('active'),
-                    'image' => $product[0]->image,
-                ]);
+            imageFirst::where('product_id', $update['id'])->update([
+                'id' => $update['image']['id'],
+                'product_id' => $update['image']['product_id'],
+                'alt' => $update['image']['alt'],
+                'width' => $update['image']['width'],
+                'height' => $update['image']['height'],
+                'src' => $update['image']['src'],
+            ]);
         }
 
-        return redirect('admin/products/list');
-    }
+        if ($update['variants'] == null) {
+            Variant::where('product_id', $update['id'])->delete();
+        } else {
 
-    public function deleteProductAjax(Request $request)
-    {
 
-        $product_ =  DB::table('products')->where('id', $request->id)->get();
-        $product = $product_[0];
-        $path = 'uploads/products/' . $product->image;
-        if ($product) {
-            $status = $product->active;
-            if (file_exists($path)) {
-                unlink($path);
-                DB::table('products')->where('id', $request->id)->delete();
-                return response()->json([
-                    'code' => 200,
-                    'message' => 'Xóa sản phẩm thành công.',
-                    'id' => $request->id,
-                    'status' => $status
-                ]);
-            } else {
-                DB::table('products')->where('id', $request->id)->delete();
-                return response()->json([
-                    'code' => 200,
-                    'message' => 'Xóa sản phẩm thành công.',
-                    'id' => $request->id,
-                    'status' => $status
-                ]);
+            //Kiểm tra: so sánh dữ liệu từ DB_app và dữ liệu từ shopify trả về.
+            // Xóa những Variant trong DB_app không còn trên shopify  
+            $variantOld = Variant::where('product_id', $update['id'])->get();
+            foreach ($variantOld as $valueVariant) {
+                $checkVariant = 0;
+                for ($checkDeleteVariant = 0; $checkDeleteVariant < count($update['variants']); $checkDeleteVariant++) {
+                    if ($valueVariant->id == $update['variants'][$checkDeleteVariant]['id']) {
+                        $checkVariant += 1;
+                    }
+                }
+                if ($checkVariant == 0) {
+                    Variant::where('id', $valueVariant->id)->delete();
+                }
+            }
+            for ($j = 0; $j < count($update['variants']); $j++) {
+
+                $dataVariant =  Variant::find($update['variants'][$j]['id']);
+                if ($dataVariant) {
+                    Variant::where('id', $update['variants'][$j]['id'])->update([
+                        'title' =>  $update['variants'][$j]['title'],
+                        'price' =>  $update['variants'][$j]['price'],
+                        'sku' =>  $update['variants'][$j]['sku'],
+                        'position' =>  $update['variants'][$j]['position'],
+                        'inventory_policy' =>  $update['variants'][$j]['inventory_policy'],
+                        'compare_at_price' =>  $update['variants'][$j]['compare_at_price'],
+                        'fulfillment_service' =>  $update['variants'][$j]['fulfillment_service'],
+                        'inventory_management' =>  $update['variants'][$j]['inventory_management'],
+                        'option1' =>  $update['variants'][$j]['option1'],
+                        'option2' =>  $update['variants'][$j]['option2'],
+                        'option3' =>  $update['variants'][$j]['option3'],
+                        'taxable' =>  $update['variants'][$j]['taxable'],
+                        'barcode' =>  $update['variants'][$j]['barcode'],
+                        'image_id' =>  $update['variants'][$j]['image_id'],
+                        'weight' =>  $update['variants'][$j]['weight'],
+                        'weight_unit' =>  $update['variants'][$j]['weight_unit'],
+                        'inventory_item_id' =>  $update['variants'][$j]['inventory_item_id'],
+                        'inventory_quantity' =>  $update['variants'][$j]['inventory_quantity'],
+                        'old_inventory_quantity' =>  $update['variants'][$j]['old_inventory_quantity'],
+                        'requires_shipping' =>  $update['variants'][$j]['requires_shipping'],
+                    ]);
+                } else {
+                    Variant::create([
+                        'id' => $update['variants'][$j]['id'],
+                        'product_id' => $update['variants'][$j]['product_id'],
+                        'title' =>  $update['variants'][$j]['title'],
+                        'price' =>  $update['variants'][$j]['price'],
+                        'sku' =>  $update['variants'][$j]['sku'],
+                        'position' =>  $update['variants'][$j]['position'],
+                        'inventory_policy' =>  $update['variants'][$j]['inventory_policy'],
+                        'compare_at_price' =>  $update['variants'][$j]['compare_at_price'],
+                        'fulfillment_service' =>  $update['variants'][$j]['fulfillment_service'],
+                        'inventory_management' =>  $update['variants'][$j]['inventory_management'],
+                        'option1' =>  $update['variants'][$j]['option1'],
+                        'option2' =>  $update['variants'][$j]['option2'],
+                        'option3' =>  $update['variants'][$j]['option3'],
+                        'taxable' =>  $update['variants'][$j]['taxable'],
+                        'barcode' =>  $update['variants'][$j]['barcode'],
+                        'image_id' =>  $update['variants'][$j]['image_id'],
+                        'weight' =>  $update['variants'][$j]['weight'],
+                        'weight_unit' =>  $update['variants'][$j]['weight_unit'],
+                        'inventory_item_id' =>  $update['variants'][$j]['inventory_item_id'],
+                        'inventory_quantity' =>  $update['variants'][$j]['inventory_quantity'],
+                        'old_inventory_quantity' =>  $update['variants'][$j]['old_inventory_quantity'],
+                        'requires_shipping' =>  $update['variants'][$j]['requires_shipping'],
+                    ]);
+                }
             }
         }
-        return response()->json([
-            'code' => 500,
-            'message' => 'Xóa sản phẩm thất bại!',
-        ]);
-    }
-    public function editProductImage($id)
-    {
-        $product_ = DB::table('products')->where('id', $id)->get();
-        $product = $product_[0];
-        // $imageProduct = $product->image;
-        $imageDetails = DB::table('image_products')->where('id_product', $product->id)->get();
+        if ($update['options'] == null) {
+            Option::where('product_id', $update['id'])->delete();
+        } else {
 
-        return view('admin.product.editimage', [
-            'title' => 'Sửa hình ảnh sản phẩm',
-            'product' => $product,
-            'imageDetails' => $imageDetails
-
-        ]);
-    }
-    public function deleteImageProductAjax($id)
-    {
-        DB::table('products')->where('id', $id)->delete();
-        return response()->json([
-            'id' => $id
-        ]);
-    }
-    public function changeImageProductAjax(Request $request, $id)
-    {
-        $image = $request->input('nameImageProduct');
-
-        DB::table('products')->where('id', $id)->update(['image' => $image]);
-        return response()->json([
-            'image' => $image
-        ]);
-    }
-
-
-    public function add_images_product(Request $request, $id)
-    {
-        for ($i = 0; $i < $request->input('demImages'); $i++) {
-            DB::table('image_products')
-                ->updateOrInsert([
-                    'id_product' => $id,
-                    'image_product' => $request->input('files' . $i),
-                ]);
-        }
-        return redirect()->back();
-    }
-
-    public function detailProduct($id)
-    {
-
-        $product = $this->productService->detailProduct($id);
-        $menu =  DB::table('menus')->where('id', $product->menu_id)->first();
-        $images = DB::table('image_products')->where('id_product', $product->id)->get();
-        return view('admin.product.detail', [
-            'title' => 'Chi tiết sản phẩm.',
-            'images' => $images,
-            'product' => $product,
-            'menu' => $menu,
-        ]);
-    }
-    public function search_product_byName(Request $request)
-    {
-        $products = DB::table('products')->where('name', 'LIKE', '%' . $request->keyword_name . '%')->get();
-
-        $html = '';
-        foreach ($products as $product) {
-            if ($product->active == 0) {
-                $htmlc = 'Reject';
-            } else if ($product->active == 1) {
-                $htmlc = 'Pending';
-            } else {
-                $htmlc = 'Approve';
+            //Kiểm tra: so sánh dữ liệu từ DB_app và dữ liệu từ shopify trả về.
+            // Xóa những Option trong DB_app không còn trên shopify  
+            $optionOld = Option::where('product_id', $update['id'])->get();
+            foreach ($optionOld as $valueOption) {
+                $checkOption = 0;
+                for ($checkDeleteOption = 0; $checkDeleteOption < count($update['options']); $checkDeleteOption++) {
+                    if ($valueOption->id == $update['options'][$checkDeleteOption]['id']) {
+                        $checkOption += 1;
+                    }
+                }
+                if ($checkOption == 0) {
+                    Option::where('id', $valueOption->id)->delete();
+                    ValueOption::where('id_options', $valueOption->id)->delete();
+                }
             }
 
+            for ($z = 0; $z < count($update['options']); $z++) {
+                $dataOption =  Option::find($update['options'][$z]['id']);
+                ValueOption::where('id_options', $update['options'][$z]['id'])->delete();
+                if ($dataOption) {
+                    Option::where('id', $update['options'][$z]['id'])->update([
+                        'name' => $update['options'][$z]['name'],
+                        'position' => $update['options'][$z]['position'],
+                    ]);
 
-            $menu_name = DB::table('menus')->select('name')->where('id', $product->menu_id)->first();
 
-            $html .= '<tr id="account_' . $product->id . '">';
-            $html .= '<td>' . $product->name . '</td>';
-            $html .= '<td>' . $menu_name->name . '</td>';
-            $html .= '<td>' . $product->content . '</td>';
-            $html .= '<td>' . number_format($product->price, 0, ',', '.') . 'VNĐ</td>';
-            $html .= '<td>' . number_format($product->price_sale, 0, ',', '.') . 'VNĐ</td>';
-            $html .= '<td>' . $product->qty . '</td>';
-            $html .= '<td><a href="' . $product->image  . '" target="_blank">
-            <img src="' . $product->image . '" width="100px" ></a><div>
-            <a href="/admin/products/editProductImage/' . $product->id . '">Sửa ảnh</a></div></td>';
-            $html .= '<td>' . $htmlc . '</td>';
-            $html .= '<td> <a class="btn btn-primary btn-sm" href="/admin/products/editProduct/' . $product->id . '"><i class="fas fa-edit"></i></a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:blue; cursor: pointer;" onclick="deleteProduct(' . $product->id . ')">';
-            $html .= '<i id="hoverdi" class="fas fa-trash"></i>  </a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:green; margin-top: 2px;" href="detailProduct/' . $product->id . '">Xem</a></td></tr>';
+                    for ($y = 0; $y < count($update['options'][$z]['values']); $y++) {
+                        ValueOption::create([
+                            'product_id' => $update['options'][$z]['product_id'],
+                            'id_options' => $update['options'][$z]['id'],
+                            'stt' => $y,
+                            'name' => $update['options'][$z]['values'][$y],
+                        ]);
+                    }
+                } else {
+                    Option::create([
+                        'id' => $update['options'][$z]['id'],
+                        'product_id' => $update['options'][$z]['product_id'],
+                        'name' => $update['options'][$z]['name'],
+                        'position' => $update['options'][$z]['position'],
+                    ]);
+                    for ($y = 0; $y < count($update['options'][$z]['values']); $y++) {
+                        ValueOption::create([
+                            'product_id' => $update['options'][$z]['product_id'],
+                            'id_options' => $update['options'][$z]['id'],
+                            'stt' => $y,
+                            'name' => $update['options'][$z]['values'][$y],
+                        ]);
+                    }
+                }
+            }
         }
-        return  response()->json([
-            'html' => $html,
-        ]);
-    }
-    public function search_product_byPrice(Request $request)
-    {
-        $products = DB::table('products')->where('price', 'LIKE', '%' . $request->keyword_price . '%')->get();
-        $html = '';
-        foreach ($products as $product) {
-            if ($product->active == 0) {
-                $htmlc = 'Reject';
-            } else if ($product->active == 1) {
-                $htmlc = 'Pending';
-            } else {
-                $htmlc = 'Approve';
+
+        if ($update['images'] == null || count($update['images']) < 1) {
+            Image::where('product_id', $update['id'])->delete();
+        } else {
+
+            //Kiểm tra: so sánh dữ liệu từ DB_app và dữ liệu từ shopify trả về.
+            // Xóa những Image trong DB_app không còn trên shopify  
+            $imageOld = Image::where('product_id', $update['id'])->get();
+            foreach ($imageOld as $value_) {
+                $check = 0;
+                for ($checkDelete = 0; $checkDelete < count($update['images']); $checkDelete++) {
+                    if ($value_->id == $update['images'][$checkDelete]['id']) {
+                        $check += 1;
+                    }
+                }
+                if ($check == 0) {
+                    Image::where('id', $value_->id)->delete();
+                }
             }
 
-            $menu_name = DB::table('menus')->select('name')->where('id', $product->menu_id)->first();
-            $html .= '<tr id="account_' . $product->id . '">';
-            $html .= '<td>' . $product->name . '</td>';
-            $html .= '<td>' . $menu_name->name . '</td>';
-            $html .= '<td>' . $product->content . '</td>';
-            $html .= '<td>' . number_format($product->price, 0, ',', '.') . 'VNĐ</td>';
-            $html .= '<td>' . number_format($product->price_sale, 0, ',', '.') . 'VNĐ</td>';
-            $html .= '<td>' . $product->qty . '</td>';
-            $html .= '<td><a href="' . $product->image  . '" target="_blank">
-            <img src="' . $product->image . '" width="100px" ></a><div>
-            <a href="/admin/products/editProductImage/' . $product->id . '">Sửa ảnh</a></div></td>';
-            $html .= '<td>' . $htmlc . '</td>';
-            $html .= '<td> <a class="btn btn-primary btn-sm" href="/admin/products/editProduct/' . $product->id . '"><i class="fas fa-edit"></i></a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:blue; cursor: pointer;" onclick="deleteProduct(' . $product->id . ')">';
-            $html .= '<i id="hoverdi" class="fas fa-trash"></i>  </a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:green; margin-top: 2px;" href="detailProduct/' . $product->id . '">Xem</a></td></tr>';
-        }
-        return  response()->json([
-            'html' => $html,
-        ]);
-    }
-    public function search_product_byNameAndPrice(Request $request)
-    {
-        $products = DB::table('products')->where('name', 'LIKE', '%' . $request->keyword_name . '%')
-            ->where('price', 'LIKE', '%' . $request->keyword_price . '%')
-            ->get();
-
-        $html = '';
-        foreach ($products as $product) {
-            if ($product->active == 0) {
-                $htmlc = 'Reject';
-            } else if ($product->active == 1) {
-                $htmlc = 'Pending';
-            } else {
-                $htmlc = 'Approve';
+            for ($x = 0; $x < count($update['images']); $x++) {
+                $data =  Image::find($update['images'][$x]['id']);
+                if ($data) {
+                    $data->position = $update['images'][$x]['position'];
+                    $data->alt = $update['images'][$x]['alt'];
+                    $data->width =  $update['images'][$x]['width'];
+                    $data->height =  $update['images'][$x]['height'];
+                    $data->src = $update['images'][$x]['src'];
+                    $data->update();
+                } else {
+                    Image::create([
+                        'id' => $update['images'][$x]['id'],
+                        'product_id' => $update['id'],
+                        'position' => $update['images'][$x]['position'],
+                        'alt' => $update['images'][$x]['alt'],
+                        'width' => $update['images'][$x]['width'],
+                        'height' => $update['images'][$x]['height'],
+                        'src' => $update['images'][$x]['src'],
+                    ]);
+                }
             }
-
-            $menu_name = DB::table('menus')->select('name')->where('id', $product->menu_id)->first();
-            $html .= '<tr id="account_' . $product->id . '">';
-            $html .= '<td>' . $product->name . '</td>';
-            $html .= '<td>' . $menu_name->name . '</td>';
-            $html .= '<td>' . $product->content . '</td>';
-            $html .= '<td>' . number_format($product->price, 0, ',', '.') . 'VNĐ</td>';
-            $html .= '<td>' . number_format($product->price_sale, 0, ',', '.') . 'VNĐ</td>';
-            $html .= '<td>' . $product->qty . '</td>';
-            $html .= '<td><a href="' . $product->image  . '" target="_blank">
-            <img src="' . $product->image . '" width="100px" ></a><div>
-            <a href="/admin/products/editProductImage/' . $product->id . '">Sửa ảnh</a></div></td>';
-            $html .= '<td>' . $htmlc . '</td>';
-            $html .= '<td> <a class="btn btn-primary btn-sm" href="/admin/products/editProduct/' . $product->id . '"><i class="fas fa-edit"></i></a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:blue; cursor: pointer;" onclick="deleteProduct(' . $product->id . ')">';
-            $html .= '<i id="hoverdi" class="fas fa-trash"></i>  </a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:green; margin-top: 2px;" href="detailProduct/' . $product->id . '">Xem</a></td></tr>';
         }
-        return  response()->json([
-            'html' => $html,
-        ]);
     }
 
-    public function refresh_listProduct()
+    public function deleteProductShopify(Request $request)
     {
-        $products = DB::table('products')->orderBy('id', 'desc')->paginate(10);
-        $html = '';
-        foreach ($products as $product) {
-            if ($product->active == 0) {
-                $htmlc = 'Reject';
-            } else if ($product->active == 1) {
-                $htmlc = 'Pending';
-            } else {
-                $htmlc = 'Approve';
-            }
-            $menu_name = DB::table('menus')->select('name')->where('id', $product->menu_id)->first();
-            $html .= '<tr id="account_' . $product->id . '">';
-            $html .= '<td>' . $product->name . '</td>';
-            $html .= '<td>' . $menu_name->name . '</td>';
-            $html .= '<td>' . $product->content . '</td>';
-            $html .= '<td>' . number_format($product->price, 0, ',', '.') . ' VNĐ</td>';
-            $html .= '<td>' . number_format($product->price_sale, 0, ',', '.') . ' VNĐ</td>';
-            $html .= '<td>' . $product->qty . '</td>';
-            $html .= '<td><a href="' . $product->image  . '" target="_blank">
-            <img src="' . $product->image . '" width="100px" ></a><div>
-            <a href="/admin/products/editProductImage/' . $product->id . '">Sửa ảnh</a></div></td>';
-            $html .= '<td>' . $htmlc . '</td>';
-            $html .= '<td> <a class="btn btn-primary btn-sm" href="/admin/products/editProduct/' . $product->id . '"><i class="fas fa-edit"></i></a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:blue; cursor: pointer;" onclick="deleteProduct(' . $product->id . ')">';
-            $html .= '<i id="hoverdi" class="fas fa-trash"></i>  </a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:green; margin-top: 2px;" href="detailProduct/' . $product->id . '">Xem</a></td></tr>';
-        }
-        return  response()->json([
-            'html' => $html,
-        ]);
-    }
-    public function filter(Request $request)
-    {
-        $products = DB::table('products')->where('active', $request->keyword)->get();
-        $html = '';
-        foreach ($products as $product) {
-            if ($product->active == 0) {
-                $htmlc = 'Reject';
-            } else if ($product->active == 1) {
-                $htmlc = 'Pending';
-            } else {
-                $htmlc = 'Approve';
-            }
-            $menu_name = DB::table('menus')->select('name')->where('id', $product->menu_id)->first();
-            $html .= '<tr id="listProducts_' . $product->id . '">';
-            $html .= '<td>' . $product->name . '</td>';
-            $html .= '<td>' . $menu_name->name . '</td>';
-            $html .= '<td>' . $product->content . '</td>';
-            $html .= '<td>' . number_format($product->price, 0, ',', '.') . ' VNĐ</td>';
-            $html .= '<td>' . number_format($product->price_sale, 0, ',', '.') . ' VNĐ</td>';
-            $html .= '<td>' . $product->qty . '</td>';
-            $html .= '<td><a href="' . $product->image  . '" target="_blank">
-            <img src="' . $product->image . '" width="100px" ></a><div>
-            <a href="/admin/products/editProductImage/' . $product->id . '">Sửa ảnh</a></div></td>';
-            $html .= '<td>' . $htmlc . '</td>';
-            $html .= '<td> <a class="btn btn-primary btn-sm" href="/admin/products/editProduct/' . $product->id . '"><i class="fas fa-edit"></i></a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:blue; cursor: pointer;" onclick="deleteProduct(' . $product->id . ')">';
-            $html .= '<i id="hoverdi" class="fas fa-trash"></i>  </a>';
-            $html .= '<a class="btn btn-danger btn-sm" style="color:green; margin-top: 2px;" href="detailProduct/' . $product->id . '">Xem</a></td></tr>';
-        }
-        return  response()->json([
-            'html' => $html,
-        ]);
+        $id = $request->input('id');
+        Product::where('id', $id)->delete();
+        Image::where('product_id', $id)->delete();
+        imageFirst::where('product_id', $id)->delete();
+        Variant::where('product_id', $id)->delete();
+        Option::where('product_id', $id)->delete();
+        ValueOption::where('product_id', $id)->delete();
     }
 }
